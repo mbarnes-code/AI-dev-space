@@ -1,3 +1,4 @@
+-- This file is now redundant. All of its contents have been moved to sql_script.sql
 -- Enable the pgvector extension
 create extension if not exists vector;
 

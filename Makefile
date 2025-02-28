@@ -1,5 +1,5 @@
-# .DEFAULT_GOAL := local
-# .PHONY: tests
+.DEFAULT_GOAL := help
+.PHONY: help tests
 SHELL := /bin/bash
 
 # General Commands

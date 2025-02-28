@@ -1,12 +1,13 @@
 from dotenv import load_dotenv
 from datetime import datetime
+import requests
 import streamlit as st
 import json
 import os
 import logging
-import uuid  # Import uuid module
+import uuid
 
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage, ToolMessage
 
 """
 This Python script is an example of how to use Streamlit with
@@ -35,10 +36,37 @@ def get_session_id():
 
 session_id = get_session_id()
 
-def prompt_ai(prompt):
-    # Placeholder function for AI response
-    # Replace with actual implementation
-    return {"output": f"Response to: {prompt}"}
+def prompt_ai(messages):
+    """
+    Sends a request to the AI agent endpoint with the current conversation history.
+
+    Args:
+        messages (list): List of messages in the conversation history.
+
+    Returns:
+        dict: The response from the AI agent endpoint.
+    """
+    try:
+        # Prepare the payload for the request
+        payload = {
+            "messages": [json.loads(message.json()) for message in messages],
+            "session_id": session_id
+        }
+
+        # Send the request to the AI agent endpoint
+        response = requests.post(agent_endpoint_url, json=payload)
+        response.raise_for_status()  # Raise an exception for bad status codes
+
+        # Parse the response
+        response_data = response.json()
+        return response_data
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error communicating with the AI agent endpoint: {e}")
+        st.error("Failed to communicate with the AI agent. Please check the logs for more details.")
+        return {"output": "Error communicating with the AI agent."}
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding JSON response from AI agent: {e}")
+        return {"output": "Error decoding response from the AI agent."}
 
 def main():
     st.title("N8N Asana Chatbot")
@@ -65,9 +93,16 @@ def main():
         # Display assistant response in chat message container
         with st.chat_message("assistant"):
             try:
-                response = prompt_ai(prompt)
-                st.markdown(response["output"])
-                st.session_state.messages.append(AIMessage(content=response["output"]))
+                response = prompt_ai(st.session_state.messages)
+                if "output" in response:
+                    st.markdown(response["output"])
+                    st.session_state.messages.append(AIMessage(content=response["output"]))
+                elif "tool_calls" in response:
+                    for tool_call in response["tool_calls"]:
+                        st.markdown(f"Tool call: {tool_call}")
+                        st.session_state.messages.append(ToolMessage(content=tool_call))
+                else:
+                    st.markdown("No output or tool calls in response.")
             except Exception as e:
                 logger.error(f"Error generating response: {e}")
                 st.error("Failed to generate a response. Please check the logs for more details.")

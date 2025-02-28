@@ -173,10 +173,10 @@ async def thirdbrain_mcp_openai_agent(
             session_id=request.session_id,
             message_type="human",
             content=request.query
-        )
-
-    except ToolError as e:
-        logger.error(f"Tool error: {e}")
+            )        
+    except ToolError as e:        
+        logger.error(f"Tool error: {e}")        
+        await save_message(session_id=request.session_id, message_type="ai", content=f"Tool error: {str(e)}", data={"error": str(e), "request_id": request.request_id})
         raise HTTPException(status_code=500, detail=f"Tool error: {str(e)}")
     except Exception as e:
         logger.exception("Unexpected error during request processing")

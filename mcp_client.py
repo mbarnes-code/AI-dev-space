@@ -145,7 +145,7 @@ class MCPClient:
                 server_params = StdioServerParameters(
                     command=server_config['command'],
                     args=server_config['args'],
-                    env=server_config.get('env'),
+                    env=server_config.get('env', {}),
                 )
                 logger.info("Created server parameters: command=%s, args=%s, env=%s",
                               server_params.command, server_params.args, server_params.env)
@@ -208,7 +208,7 @@ class MCPClient:
                     dynamic_tool = self.create_dynamic_tool(tool, server_name, server_agent)
                     self.tools[tool.name] = {
                         "name": tool.name,
-                        "callable": self.call_tool(f"{server_name}__{tool.name}"),
+                        "callable": self.call_tool(f"{server_name}__{tool.name}") if tool.name != "xxx" else None,
                         "schema": {
                             "type": "function",
                             "function": {
@@ -361,7 +361,7 @@ class MCPClient:
         server_params = StdioServerParameters(
             command=server_config['command'],
             args=server_config['args'],
-            env=None
+            env=server_config.get('env', {})
         )
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
         stdio, write = stdio_transport
@@ -546,7 +546,7 @@ class MCPClient:
             for tool in self.available_tools
             if tool['name']
             != "xxx"  # Excludes xxx tool as it has an incorrect schema
-        }
+        }        
         
     def call_tool(self, server__tool_name: str) -> Any:
         """
@@ -561,6 +561,8 @@ class MCPClient:
         """
         server_name, tool_name = server__tool_name.split("__")  
 
+        if tool_name == "xxx":
+            return None
         if not server_name in self.sessions:
             raise RuntimeError("Not connected to MCP server")
  
@@ -630,7 +632,7 @@ class MCPClient:
         """
         try:
             command, *args = query.split()
-            if command == "/addMcpServer":
+            if command == "/addMcpServer" and args:
                 result = await self.add_mcp_configuration(" ".join(args))
             elif command == "/list":
                 result = await self.list_mcp_servers()
@@ -643,7 +645,7 @@ class MCPClient:
             elif command == "/dropMcpServer" and args:
                 result = await self.drop_mcp_server(args[0])
             else:
-                result = "Error: Invalid command or missing arguments."
+                result = "Error: Invalid command or missing arguments. Use /list to see available commands."
         except Exception as e:
             logging.error(f"Error handling slash commands: {e}")
             raise
@@ -714,7 +716,7 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None, deps:
             # Call the tool with the arguments using our callable initialized in the tools dict
             logging.debug(tool_call.function.name)
             tool_result = await tools[tool_call.function.name]["callable"](**arguments)
-            if tool_result is None:
+            if tool_result is None and tool_call.function.name != "xxx":
                 tool_result = f"{tool_call.function.name}"
             #logging.debug("tool result begin")
             #pprint.pprint(tool_result)

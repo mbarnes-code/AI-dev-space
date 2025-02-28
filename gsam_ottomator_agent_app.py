@@ -1,6 +1,6 @@
 """
 GSAM Ottomator Agent
-"""
+""" 
 from typing import Annotated
 
 import os
@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Header, Request
 from fastapi.responses import FileResponse
 
+from lib.codegen_utilities import log_debug
 from lib.codegen_utilities import log_debug
 
 from gsam_ottomator_agent.gsam_supabase_agent import (
@@ -26,7 +27,6 @@ from gsam_ottomator_agent.gsam_postgres_agent import (
     AgentRequest as PostgresAgentRequest,
     AgentResponse as PostgresAgentResponse
 )
-
 
 # FastAPI headers reference:
 # https://fastapi.tiangolo.com/tutorial/header-param-models/#forbid-extra-headers
@@ -54,7 +54,7 @@ else:
     app = init_fastapi_app_supabase()
 
 
-@app.post("/api/gsam-supabase-agent", response_model=SupaBaseAgentResponse)
+@app.post("/api/gsam-supabase-agent", response_model=SupaBaseAgentResponse) 
 async def gsam_supabase_agent_endpoint(
     agent_request: SupaBaseAgentRequest,
     authenticated: bool = Depends(verify_token_supabase),
@@ -65,7 +65,7 @@ async def gsam_supabase_agent_endpoint(
             status_code=400,
             detail="Invalid agent database type [GSAE-E010]"
         )
-    result = await gsam_supabase_agent(agent_request, authenticated,
+    result = await gsam_supabase_agent(agent_request, authenticated, 
                                        dict(request))
     return result
 
@@ -81,7 +81,7 @@ async def gsam_postgres_agent_endpoint(
             status_code=400,
             detail="Invalid agent database type [GPAE-E010]"
         )
-    result = await gsam_postgres_agent(agent_request, authenticated,
+    result = await gsam_postgres_agent(agent_request, authenticated, 
                                        dict(request))
     return result
 
@@ -97,6 +97,7 @@ async def get_image(image_name: str):
     return FileResponse(image_path)
 
 if __name__ == "__main__":
-    import uvicorn
+    import uvicorn 
     # Feel free to change the port here if you need
     uvicorn.run(app, host="0.0.0.0", port=8001)
+

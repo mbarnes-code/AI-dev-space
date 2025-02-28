@@ -1,13 +1,14 @@
 import asana
 from asana.rest import ApiException
 from dotenv import load_dotenv
-from datetime import datetime  # Import datetime module
+from datetime import datetime
 import json
 import os
 import logging
 import pinecone
 
 from langchain_core.tools import tool
+from langchain_openai import OpenAIEmbeddings
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +37,9 @@ if index_name not in pinecone.list_indexes():
     pinecone.create_index(index_name, dimension=512)
 
 index = pinecone.Index(index_name)
+
+# Initialize OpenAI Embeddings
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small", dimensions=512)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -227,6 +231,20 @@ def query_pinecone_index(query_vector, top_k=5):
         logger.error(f"Exception when querying Pinecone index: {e}")
         return f"Exception when querying Pinecone index: {e}"
 
+@tool
+def generate_embedding(text):
+    """
+    Creates vector embedding from text using configured embedding model.
+
+    Args:
+        text: String to generate embedding for
+
+    Returns:
+        list[float]: Vector embedding of input text
+    """    
+    return embeddings.embed_query(text)
+
+
 # Maps the function names to the actual function object in the script
 # This mapping will also be used to create the list of tools to bind to the agent
 available_functions = {
@@ -237,5 +255,6 @@ available_functions = {
     "update_asana_task": update_asana_task,
     "delete_task": delete_task,
     "add_vectors_to_pinecone": add_vectors_to_pinecone,
-    "query_pinecone_index": query_pinecone_index
+    "query_pinecone_index": query_pinecone_index,
+    "generate_embedding": generate_embedding
 }

@@ -3,12 +3,13 @@ FROM python:3.9-slim
 # Build argument for port with default value
 ARG PORT=8001
 ENV PORT=${PORT}
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory
 WORKDIR /app
 
 # Copy the requirements file
-COPY requirements.txt .
+COPY requirements.txt . 
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -18,9 +19,6 @@ COPY . .
 
 # Expose the port from build argument
 EXPOSE ${PORT}
-
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
 
 # Create a non-root user and switch to it
 RUN useradd -m appuser

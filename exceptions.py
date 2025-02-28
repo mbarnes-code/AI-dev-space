@@ -1,3 +1,6 @@
+"""
+Custom exception classes for the MCP application.
+"""
 class BaseMCPError(Exception):
     """Base class for all MCP-related errors."""
     pass

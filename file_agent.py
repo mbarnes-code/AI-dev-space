@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,6 +14,10 @@ from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app and OpenAI client
 app = FastAPI()
@@ -97,10 +102,11 @@ def process_files_to_string(files: Optional[List[Dict[str, Any]]]) -> str:
     if not files:
         return ""
         
-    file_content = "File content to use as context:\n\n"
+    file_content = "File content to use as context:\n"
     for i, file in enumerate(files, 1):
+        logger.info(f"Processing file: {file['name']}")
         decoded_content = base64.b64decode(file['base64']).decode('utf-8')
-        file_content += f"{i}. {file['name']}:\n\n{decoded_content}\n\n"
+        file_content += f"\n{i}. {file['name']}:\n{decoded_content}\n"
     return file_content        
 
 @app.post("/api/file-agent", response_model=AgentResponse)
@@ -117,11 +123,11 @@ async def file_agent(
         for msg in conversation_history:
             msg_data = msg["message"]
             msg_type = "user" if msg_data["type"] == "human" else "assistant" # Type conversion for OpenAI API
-            msg_content = msg_data["content"]
+            msg_content = msg_data["content"]            
             
             # Process files if they exist in the message data
             if msg_type == "user" and "data" in msg_data and "files" in msg_data["data"]:
-                files_content = process_files_to_string(msg_data["data"]["files"])
+                files_content = process_files_to_string(msg_data["data"]["files"])                
                 if files_content:
                     msg_content = f"{files_content}\n\n{msg_content}"
             
@@ -143,7 +149,7 @@ async def file_agent(
         current_message = request.query
         if request.files:
             files_content = process_files_to_string(request.files)
-            current_message = f"{files_content}\n\n{current_message}"
+            current_message = f"{files_content}\n{current_message}"
 
         # Prepare messages for OpenAI
         openai_messages = []
@@ -152,7 +158,7 @@ async def file_agent(
 
         # Get response from OpenAI
         completion = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=openai_messages
         )
         agent_response = completion.choices[0].message.content
@@ -168,7 +174,7 @@ async def file_agent(
         return AgentResponse(success=True)
 
     except Exception as e:
-        print(f"Error processing request: {str(e)}")
+        logger.error(f"Error processing request: {str(e)}")
         # Store error message in conversation
         await store_message(
             session_id=request.session_id,

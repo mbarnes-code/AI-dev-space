@@ -53,7 +53,7 @@ async def prompt_ai(messages):
     }
     try:
         async for event in chatbot.astream_events(
-                {"messages": messages}, config, version="v1"
+                {"messages": messages}, config
             ):
                 if event["event"] == "on_chat_model_stream":
                     yield event["data"]["chunk"].content

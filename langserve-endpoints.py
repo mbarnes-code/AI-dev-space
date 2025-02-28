@@ -2,6 +2,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from langserve import add_routes
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from langgraph.checkpoint import SqliteSaver
 import uvicorn
 import os
 import logging
@@ -14,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from runnable import get_runnable
+from runnable import state_graph
 
 app = FastAPI(
     title="LangServe AI Agent",
@@ -40,6 +42,11 @@ def main():
     try:
         # Fetch the AI Agent LangGraph runnable which generates the workouts
         runnable = get_runnable()
+        
+        # Add checkpointing to the graph
+        checkpoint_path = "./checkpoints"
+        saver = SqliteSaver.from_directory(checkpoint_path)
+        state_graph.set_checkpointer(saver)
 
         # Create the Fast API route to invoke the runnable
         add_routes(app, runnable)

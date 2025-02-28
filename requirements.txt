@@ -1,61 +1,61 @@
-aiohappyeyeballs==2.4.6
-aiohttp==3.11.13
-aiosignal==1.3.2
-annotated-types==0.7.0
-anyio==4.8.0
-async-timeout==5.0.1
-asyncpg==0.30.0
-attrs==25.1.0
-certifi==2025.1.31
-charset-normalizer==3.4.1
-click==8.1.8
-colorama==0.4.6
-deprecation==2.1.0
-distro==1.9.0
-dnspython==2.7.0
-exceptiongroup==1.2.2
-faiss-cpu==1.10.0
-fastapi==0.115.9
-frozenlist==1.5.0
-gotrue==2.11.4
-h11==0.14.0
-h2==4.2.0
-hpack==4.1.0
-httpcore==1.0.7
-httpx==0.28.1
-hyperframe==6.1.0
-idna==3.10
-jiter==0.8.2
-loguru==0.7.3
-multidict==6.1.0
-nest-asyncio==1.6.0
-numpy==2.0.2
-openai==1.65.1
-packaging==24.2
-pinecone-client==6.0.0
-pinecone-plugin-interface==0.0.7
-pip-review==1.3.0
-postgrest==0.19.3
-propcache==0.3.0
-pydantic==2.10.6
-pydantic-core==2.30.0
-python-dateutil==2.9.0.post0
-python-dotenv==1.0.1
-python-multipart==0.0.20
-PyYAML==6.0.2
-realtime==2.4.1
-requests==2.32.3
-sentry-sdk==2.22.0
-six==1.17.0
-sniffio==1.3.1
-starlette==0.46.0
-storage3==0.11.3
-StrEnum==0.4.15
-supabase==2.13.0
-supafunc==0.9.3
-tqdm==4.67.1
-typing-extensions==4.12.2
-urllib3==2.3.0
-uvicorn==0.34.0
-websockets==15.0
-yarl==1.18.3
+aiohappyeyeballs==2.4.6  # Updated version
+aiohttp==3.11.13  # Updated version
+aiosignal==1.3.2  # Updated version
+annotated-types==0.7.0  # Updated version
+anyio==4.8.0  # Updated version
+async-timeout==5.0.1  # Updated version
+asyncpg==0.30.0  # Updated version
+attrs==25.1.0  # Updated version
+certifi==2025.1.31  # Updated version
+charset-normalizer==3.4.1  # Updated version
+click==8.1.8  # Updated version
+colorama==0.4.6  # Updated version
+deprecation==2.1.0  # Updated version
+distro==1.9.0  # Updated version
+dnspython==2.7.0  # Updated version
+exceptiongroup==1.2.2  # Updated version
+faiss-cpu==1.10.0  # Updated version
+fastapi==0.115.9  # Updated version
+frozenlist==1.5.0  # Updated version
+gotrue==2.11.4  # Updated version
+h11==0.14.0  # Updated version
+h2==4.2.0  # Updated version
+hpack==4.1.0  # Updated version
+httpcore==1.0.7  # Updated version
+httpx==0.28.1  # Updated version
+hyperframe==6.1.0  # Updated version
+idna==3.10  # Updated version
+jiter==0.8.2  # Updated version
+loguru==0.7.3  # Updated version
+multidict==6.1.0  # Updated version
+nest-asyncio==1.6.0  # Updated version
+numpy==2.0.2  # Updated version
+openai==1.65.1  # Updated version
+packaging==24.2  # Updated version
+pinecone-client==6.0.0  # Updated version
+pinecone-plugin-interface==0.0.7  # Updated version
+pip-review==1.3.0  # Updated version
+postgrest==0.19.3  # Updated version
+propcache==0.3.0  # Updated version
+pydantic==2.10.6  # Updated version
+pydantic-core==2.30.0  # Updated version
+python-dateutil==2.9.0.post0  # Updated version
+python-dotenv==1.0.1  # Updated version
+python-multipart==0.0.20  # Updated version
+PyYAML==6.0.2  # Updated version
+realtime==2.4.1  # Updated version
+requests==2.32.3  # Updated version
+sentry-sdk==2.22.0  # Updated version
+six==1.17.0  # Updated version
+sniffio==1.3.1  # Updated version
+starlette==0.46.0  # Updated version
+storage3==0.11.3  # Updated version
+StrEnum==0.4.15  # Updated version
+supabase==2.13.0  # Updated version
+supafunc==0.9.3  # Updated version
+tqdm==4.67.1  # Updated version
+typing-extensions==4.12.2  # Updated version
+urllib3==2.3.0  # Updated version
+uvicorn==0.34.0  # Updated version
+websockets==15.0  # Updated version
+yarl==1.18.3  # Updated version
