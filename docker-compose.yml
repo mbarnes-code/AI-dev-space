@@ -1,0 +1,108 @@
+version: '3.8'
+
+volumes:
+  n8n_storage:
+  postgres_storage:
+  ollama_storage:
+  qdrant_storage:
+  open-webui:
+  flowise:
+
+networks:
+  demo:
+    driver: bridge
+
+services:
+  n8n:
+    image: n8nio/n8n
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
+    volumes:
+      - n8n_storage:/root/.n8n
+    networks:
+      - demo
+
+  postgres:
+    image: postgres:latest
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+    networks:
+      - demo
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_storage:/root/.ollama
+    networks:
+      - demo
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - demo
+
+  open-webui:
+    image: open-webui:latest
+    networks:
+      - demo
+    volumes:
+      - open-webui:/root/.open-webui
+
+  flowise:
+    image: flowise/flowise:latest
+    networks:
+      - demo
+    volumes:
+      - flowise:/root/.flowise
+
+  gsam_ottomator_agent_app:
+    build:
+      context: .
+    environment:
+      - PORT=8001
+      - CMD_TO_RUN="uvicorn gsam_ottomator_agent_app:app --host 0.0.0.0 --port ${PORT}"
+    ports:
+      - "8001:8001"
+    networks:
+      - demo
+
+  thirdbrain_mcp_openai_agent:
+    build:
+      context: .
+    environment:
+      - PORT=8002
+      - CMD_TO_RUN="uvicorn thirdbrain_mcp_openai_agent:app --host 0.0.0.0 --port ${PORT}"
+    ports:
+      - "8002:8002"
+    networks:
+      - demo
+
+  combined_agent:
+    build:
+      context: .
+    environment:
+      - PORT=8003
+      - CMD_TO_RUN="python combined_agent.py"
+    ports:
+      - "8003:8003"
+    networks:
+      - demo
+    depends_on:
+      - postgres
+      - n8n
+      - ollama
+    volumes:
+      - ./data:/app/data
