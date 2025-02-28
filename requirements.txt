@@ -59,3 +59,4 @@ urllib3==2.3.0  # Updated version
 uvicorn==0.34.0  # Updated version
 websockets==15.0  # Updated version
 yarl==1.18.3  # Updated version
+psutil==5.8.0  # Updated version

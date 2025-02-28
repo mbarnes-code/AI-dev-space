@@ -7,6 +7,10 @@ import requests
 import json
 import time
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
 model = os.getenv('LLM_MODEL', 'gpt-4o')
@@ -33,7 +37,9 @@ def fetch_workflow(workflow_id):
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
-    return None
+    else:
+        logging.warning(f"Failed to fetch workflow {workflow_id}. Status code: {response.status_code}")
+        return None
 
 def process_workflow(workflow_data):
     """
@@ -60,7 +66,9 @@ def process_workflow(workflow_data):
         workflow_json_escaped = workflow_json.replace("'", "\\'")
         # Create the n8n-demo component string
         return f"<n8n-demo workflow='{workflow_json_escaped}'></n8n-demo>"
-    return None
+    else:
+        logging.warning("Invalid workflow data provided to process_workflow.")
+        return None
 
 def check_workflow_legitimacy(workflow_json):
     """
@@ -83,7 +91,11 @@ def check_workflow_legitimacy(workflow_json):
 
     Output (GOOD/BAD):
     """
-    return llm.invoke([HumanMessage(content=legitimacy_prompt)]).content.strip()
+    try:
+        return llm.invoke([HumanMessage(content=legitimacy_prompt)]).content.strip()
+    except Exception as e:
+        logging.error(f"Error in check_workflow_legitimacy: {e}")
+        raise
 
 def analyze_workflow(workflow_json):
     """
@@ -122,7 +134,11 @@ def analyze_workflow(workflow_json):
     
     results = []
     for summary_prompt in summary_prompts:
-        results.append(llm.invoke([HumanMessage(content=summary_prompt)]).content)
+        try:
+            results.append(llm.invoke([HumanMessage(content=summary_prompt)]).content)
+        except Exception as e:
+            logging.error(f"Error in analyze_workflow: {e}")
+            raise
     
     return results
 
@@ -136,7 +152,12 @@ def generate_embedding(text):
     Returns:
         list[float]: Vector embedding of input text
     """    
-    return embeddings.embed_query(text)
+    try:
+        return embeddings.embed_query(text)
+    except Exception as e:
+        logging.error(f"Error in generate_embedding: {e}")
+        raise
+
 
 def store_in_supabase(workflow_id, workflow_name, workflow_description, workflow_info, workflow_json, n8n_demo, summaries):
     """
@@ -155,7 +176,12 @@ def store_in_supabase(workflow_id, workflow_name, workflow_description, workflow
         summaries: List of three LLM-generated summaries [accomplishment, nodes, suggestions]
     """    
     combined_summaries = "\n\n".join(summaries)
-    embedding = generate_embedding(combined_summaries)
+    try:
+        embedding = generate_embedding(combined_summaries)
+    except Exception as e:
+        logging.error(f"Failed to generate embedding for workflow {workflow_id}. Error: {e}")
+        return
+        
     
     data = {
         "workflow_id": workflow_id,
@@ -176,7 +202,12 @@ def store_in_supabase(workflow_id, workflow_name, workflow_description, workflow
             "workflow_json": json.loads(workflow_json)            
         }
     }
-    supabase.table("workflows").insert(data).execute()
+    try:
+        supabase.table("workflows").insert(data).execute()
+        logging.info(f"Successfully stored workflow {workflow_id} in Supabase.")
+    except Exception as e:
+        logging.error(f"Failed to store workflow {workflow_id} in Supabase. Error: {e}")
+
 
 def main():
     """
@@ -214,27 +245,33 @@ def main():
 
             try:
                 legitimacy = check_workflow_legitimacy(workflow_info)
-            except:
+            except Exception as e:
+                logging.error(f"Error processing workflow {workflow_id}: {e}")
                 continue
-            print(legitimacy)
+            logging.info(f"Workflow {workflow_id} legitimacy: {legitimacy}")
             
             if legitimacy == "GOOD":
                 n8n_demo = process_workflow(workflow_data)
-                summaries = analyze_workflow(workflow_info)
+                try:
+                    summaries = analyze_workflow(workflow_info)
+                except Exception as e:
+                    logging.error(f"Error analyzing workflow {workflow_id}: {e}")
+                    continue
                 
-                print(f"ID: {workflow_id}")
-                print(n8n_demo)
-                for summary in summaries:
-                    print(summary)
-                print()
+                logging.info(f"ID: {workflow_id}")
+                logging.info(f"n8n-demo: {n8n_demo}")
+                for i, summary in enumerate(summaries):
+                    logging.info(f"Summary {i+1}: {summary}")
+                
                 
                 store_in_supabase(workflow_id, workflow_name, workflow_description, workflow_info, workflow_json, n8n_demo, summaries)
             
             consecutive_failures = 0
         else:
             consecutive_failures += 1
+            logging.warning(f"Workflow ID {workflow_id} fetch failed. Consecutive failures: {consecutive_failures}")
             if consecutive_failures >= max_consecutive_failures:
-                print(f"Reached {max_consecutive_failures} consecutive failures. Stopping.")
+                logging.error(f"Reached {max_consecutive_failures} consecutive failures. Stopping.")
                 break
         
         time.sleep(0.5)

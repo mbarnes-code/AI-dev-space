@@ -1,13 +1,16 @@
 import json
+import logging
 from huggingface_hub import get_token
 from openai import AsyncOpenAI
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from typing import Any, List
 import asyncio
- 
-MODEL_ID = "meta-llama/Llama-3.3-70B-Instruct"
- 
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+MODEL_ID = "meta-llama/Meta-Llama-3-70B-Instruct"
 # System prompt that guides the LLM's behavior and capabilities
 # This helps the model understand its role and available tools
 SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external functions and engaging in casual chat. Use the responses from these function calls to provide accurate and informative answers. The answers should be natural and hide the fact that you are using tools to access real-time information. Guide the user about available tools and their capabilities. Always utilize tools to access real-time information when required. Engage in a friendly manner to enhance the chat experience.
@@ -21,14 +24,14 @@ SYSTEM_PROMPT = """You are a helpful assistant capable of accessing external fun
 - Ensure responses are based on the latest information available from function calls.
 - Maintain an engaging, supportive, and friendly tone throughout the dialogue.
 - Always highlight the potential of available tools to assist users comprehensively."""
- 
- 
+
+
 # Initialize OpenAI client with HuggingFace inference API
 # This allows us to use Llama models through HuggingFace's API
 client = AsyncOpenAI(
     base_url="https://api-inference.huggingface.co/v1/",
     api_key=get_token(),
-)
+    )
  
  
 class MCPClient:
@@ -96,13 +99,13 @@ class MCPClient:
         return callable
  
  
-async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
+async def agent_loop(query: str, tools: dict, messages: List[dict] = None) -> tuple[str, list[dict]]:
     """
     Main interaction loop that processes user queries using the LLM and available tools.
- 
+
     This function:
     1. Sends the user query to the LLM with context about available tools
-    2. Processes the LLM's response, including any tool calls
+    2. Processes the LLM's response, including any tool calls.
     3. Returns the final response to the user
  
     Args:
@@ -110,6 +113,7 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
         tools: Dictionary of available database tools and their schemas
         messages: List of messages to pass to the LLM, defaults to None
     """
+    logger.info(f"Starting agent loop with query: {query}")
     messages = (
         [
             {
@@ -127,6 +131,7 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
         if messages is None
         else messages  # reuse existing messages if provided
     )
+    logger.debug(f"Messages before first LLM call: {messages}")
     # add user query to the messages list
     messages.append({"role": "user", "content": query})
  
@@ -138,12 +143,14 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
         max_tokens=4096,
         temperature=0,
     )
+    logger.debug(f"First LLM response: {first_response}")
     # detect how the LLM call was completed:
     # tool_calls: if the LLM used a tool
     # stop: If the LLM generated a general response, e.g. "Hello, how can I help you today?"
     stop_reason = (
         "tool_calls"
         if first_response.choices[0].message.tool_calls is not None
+
         else first_response.choices[0].finish_reason
     )
  
@@ -156,6 +163,7 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
                 else tool_call.function.arguments
             )
             # Call the tool with the arguments using our callable initialized in the tools dict
+            logger.info(f"Calling tool: {tool_call.function.name} with arguments: {arguments}")
             tool_result = await tools[tool_call.function.name]["callable"](**arguments)
             # Add the tool result to the messages list
             messages.append(
@@ -166,17 +174,20 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
                     "content": json.dumps(tool_result),
                 }
             )
- 
+            logger.debug(f"Messages after tool call: {messages}")
         # Query LLM with the user query and the tool results
         new_response = await client.chat.completions.create(
             model=MODEL_ID,
             messages=messages,
         )
- 
+        logger.debug(f"Second LLM response: {new_response}")
     elif stop_reason == "stop":
         # If the LLM stopped on its own, use the first response
         new_response = first_response
- 
+        logger.debug(f"LLM stopped on its own. Response: {new_response}")
+    elif stop_reason == "length":
+        logger.warning("LLM stopped due to length limit.")
+        raise ValueError("LLM stopped due to length limit.")
     else:
         raise ValueError(f"Unknown stop reason: {stop_reason}")
  
@@ -184,7 +195,7 @@ async def agent_loop(query: str, tools: dict, messages: List[dict] = None):
     messages.append(
         {"role": "assistant", "content": new_response.choices[0].message.content}
     )
- 
+    logger.debug(f"Messages after LLM response: {messages}")
     # Return the LLM response and messages
     return new_response.choices[0].message.content, messages
  
@@ -194,6 +205,7 @@ async def main():
     Main function that sets up the MCP server, initializes tools, and runs the interactive loop.
     The server is run in a Docker container to ensure isolation and consistency.
     """
+    logger.info("Starting main function")
     # Configure Docker-based MCP server for SQLite
     server_params = StdioServerParameters(
         command="docker",
@@ -209,10 +221,11 @@ async def main():
         ],
         env=None,
     )
- 
+
     # Start MCP client and create interactive session
     async with MCPClient(server_params) as mcp_client:
         # Get available database tools and prepare them for the LLM
+        logger.info("Getting available tools from MCP server")
         mcp_tools = await mcp_client.get_available_tools()
         # Convert MCP tools into a format the LLM can understand and use
         tools = {
@@ -234,26 +247,29 @@ async def main():
             if tool.name
             != "list_tables"  # Excludes list_tables tool as it has an incorrect schema
         }
- 
+        logger.info(f"Available tools: {[tool.name for tool in mcp_tools]}")
         # Start interactive prompt loop for user queries
         messages = None
         while True:
             try:
                 # Get user input and check for exit commands
+                logger.info("Waiting for user input")
                 user_input = input("\nEnter your prompt (or 'quit' to exit): ")
                 if user_input.lower() in ["quit", "exit", "q"]:
                     break
- 
+
                 # Process the prompt and run agent loop
+                logger.info(f"User input: {user_input}")
                 response, messages = await agent_loop(user_input, tools, messages)
                 print("\nResponse:", response)
                 # print("\nMessages:", messages)
             except KeyboardInterrupt:
                 print("\nExiting...")
+                logger.info("Exiting due to keyboard interrupt")
                 break
             except Exception as e:
                 print(f"\nError occurred: {e}")
- 
+                logger.error(f"An error occurred: {e}", exc_info=True)
  
 if __name__ == "__main__":
     asyncio.run(main())

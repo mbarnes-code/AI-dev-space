@@ -1,5 +1,6 @@
 from typing import Any
 
+import logging
 import httpx
 from mcp.server.models import InitializationOptions
 import mcp.types as types
@@ -8,6 +9,8 @@ import mcp.server.stdio
 import asyncio
 NWS_API_BASE = "https://api.weather.gov"
 USER_AGENT = "weather-app/1.0"
+
+logger = logging.getLogger(__name__)
 
 server = Server("weather")
 @server.list_tools()
@@ -62,7 +65,8 @@ async def make_nws_request(client: httpx.AsyncClient, url: str) -> dict[str, Any
         response = await client.get(url, headers=headers, timeout=30.0)
         response.raise_for_status()
         return response.json()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error making request to {url}: {e}")
         return None
 
 def format_alert(feature: dict) -> str:
@@ -100,6 +104,7 @@ async def handle_call_tool(
         async with httpx.AsyncClient() as client:
             alerts_url = f"{NWS_API_BASE}/alerts?area={state}"
             alerts_data = await make_nws_request(client, alerts_url)
+            logger.info(f"alerts_data: {alerts_data}")
 
             if not alerts_data:
                 return [types.TextContent(type="text", text="Failed to retrieve alerts data")]
@@ -128,6 +133,7 @@ async def handle_call_tool(
                 text="Invalid coordinates. Please provide valid numbers for latitude and longitude."
             )]
             
+        logger.info(f"latitude: {latitude}, longitude: {longitude}")
         # Basic coordinate validation
         if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
             return [types.TextContent(
@@ -141,6 +147,7 @@ async def handle_call_tool(
             lon_str = f"{longitude}"
             points_url = f"{NWS_API_BASE}/points/{lat_str},{lon_str}"
             points_data = await make_nws_request(client, points_url)
+            logger.info(f"points_data: {points_data}")
 
             if not points_data:
                 return [types.TextContent(type="text", text=f"Failed to retrieve grid point data for coordinates: {latitude}, {longitude}. This location may not be supported by the NWS API (only US locations are supported).")]
@@ -154,6 +161,7 @@ async def handle_call_tool(
 
             # Get the forecast
             forecast_data = await make_nws_request(client, forecast_url)
+            logger.info(f"forecast_data: {forecast_data}")
             
             if not forecast_data:
                 return [types.TextContent(type="text", text="Failed to retrieve forecast data")]

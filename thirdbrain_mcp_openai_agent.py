@@ -169,18 +169,28 @@ async def thirdbrain_mcp_openai_agent(
                 logging.debug("this was most likely an error message stored in the messages table")
 
         # Store user's query if it doesn't start with a slash
-        await save_message(
+        if not request.query.startswith("/"):
+            await save_message(
             session_id=request.session_id,
             message_type="human",
             content=request.query
-            )        
-    except ToolError as e:        
-        logger.error(f"Tool error: {e}")        
+                )
+        except ToolError as e:
+        logger.error(f"Tool error: {e}")
+        await save_message(
+            session_id=request.session_id,
+            message_type="ai",
+            content=f"Tool error: {str(e)}",
+            data={"error": str(e), "request_id": request.request_id, "query": request.query}
+        )
         await save_message(session_id=request.session_id, message_type="ai", content=f"Tool error: {str(e)}", data={"error": str(e), "request_id": request.request_id})
-        raise HTTPException(status_code=500, detail=f"Tool error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Tool error: {str(e)}")  # More informative error
+    except DatabaseConnectionError as e:        
+        logger.error(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}. Please try again later.") # More specific error
     except Exception as e:
         logger.exception("Unexpected error during request processing")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred. Please contact support.") #Improved message
     
 
     # Get available tools and prepare them for the LLM
@@ -205,6 +215,9 @@ async def thirdbrain_mcp_openai_agent(
             logging.info(f"Result: {result}")
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt detected. Exiting...")
+            await mcp_client.cleanup()  # Perform cleanup actions
+            logging.info("Cleanup completed successfully.")
+            raise HTTPException(status_code=500, detail="Server interrupted by keyboard signal")
             return
         except Exception as e:
             logging.error(f"Error in agent loop: {str(e)}")

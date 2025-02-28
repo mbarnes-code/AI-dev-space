@@ -1,19 +1,18 @@
 import asyncio
 import json
-from typing import Optional, Dict, List, Union, Any
+from typing import Dict, List, Union, Any
 from contextlib import AsyncExitStack
 from colorama import init, Fore, Style
 
 from mcp import ClientSession, StdioServerParameters
 init(autoreset=True)  # Initialize colorama with autoreset=True
-from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.tools import Tool, ToolDefinition
 from mcp.client.stdio import stdio_client
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
-
+import logging
 load_dotenv()  # load environment variables from .env
 
 class MCPClient:
@@ -25,6 +24,7 @@ class MCPClient:
         self.anthropic = Anthropic()
         self.available_tools = []  # List to store all available tools across servers
         self.dynamic_tools: List[Tool] = []  # List to store dynamic pydantic tools
+        self.logger = logging.getLogger(__name__)
 
     async def connect_to_server(self):
         """Connect to an MCP server using config.json settings"""
@@ -32,18 +32,18 @@ class MCPClient:
         with open('config.json') as f:
             config = json.load(f)
         
-        print("\nAvailable servers in config:", list(config['mcpServers'].keys()))
-        print("\nFull config content:", json.dumps(config, indent=2))
+        self.logger.info("\nAvailable servers in config: %s", list(config['mcpServers'].keys()))
+        self.logger.info("\nFull config content: %s", json.dumps(config, indent=2))
         
         # Connect to all servers in config
         for server_name, server_config in config['mcpServers'].items():
-            print(f"\nAttempting to load {server_name} server config...")
-            print("Server config found:", json.dumps(server_config, indent=2))
+            self.logger.info("\nAttempting to load %s server config...", server_name)
+            self.logger.info("Server config found: %s", json.dumps(server_config, indent=2))
             
             server_params = StdioServerParameters(
                 command=server_config['command'],
                 args=server_config['args'],
-                env=None
+                env=server_config.get('env')
             )
             print("\nCreated server parameters:", server_params)
             
@@ -86,14 +86,14 @@ class MCPClient:
                     server: str = server_name
                 ) -> Union[ToolDefinition, None]:
                     # Customize tool definition based on server context
-                    tool_def.name = f"{server}__{tool_name}"
+                    tool_def.name = f"{server}__{tool_name}" 
                     tool_def.description = f"Tool from {server} server: {tool.description}"
                     return tool_def
 
-                async def tool_func(ctx: RunContext[Any], str_arg) -> str:
-                    agent_response = await server_agent.run_sync(str_arg)
-                    print(f"\nServer agent response: {agent_response}")
-                    return f"Tool {tool.name} called with {str_arg}. Agent response: {agent_response}"
+                async def tool_func(ctx: RunContext[Any], **kwargs) -> str:
+                    agent_response = await session.call_tool(tool.name, arguments=kwargs)
+                    self.logger.info(f"\nServer agent response: {agent_response}")
+                    return f"Tool {tool.name} called with {kwargs}. Agent response: {agent_response.content}"
 
                 dynamic_tool = Tool(
                     tool_func,
@@ -102,12 +102,12 @@ class MCPClient:
                     description=tool.description
                 )
                 self.dynamic_tools.append(dynamic_tool)
-                print(f"\nAdded dynamic tool: {dynamic_tool.name}")
-                print(f"Description: {dynamic_tool.description}")
-                print(f"Function: {dynamic_tool.function}")
-                print(f"Prepare function: {dynamic_tool.prepare}")
+                self.logger.info(f"\nAdded dynamic tool: {dynamic_tool.name}")
+                self.logger.info(f"Description: {dynamic_tool.description}")
+                self.logger.info(f"Function: {dynamic_tool.function}")
+                self.logger.info(f"Prepare function: {dynamic_tool.prepare}")
             
-            print(f"\nConnected to server {server_name} with tools:", 
+            self.logger.info(f"\nConnected to server {server_name} with tools:", 
                   [tool["name"] for tool in server_tools])
 
     async def process_query(self, query: str) -> str:
@@ -145,12 +145,12 @@ class MCPClient:
                 if server_name not in self.sessions:
                     raise ValueError(f"Unknown server: {server_name}")
                     
-                result = await self.sessions[server_name].call_tool(tool_name, tool_args)
+                result = await self.sessions[server_name].call_tool(tool_name, arguments=tool_args)
                 tool_results.append({"call": tool_name, "result": result})
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
                 # Continue conversation with tool results
-                if hasattr(content, 'text') and content.text:
+                if hasattr(content, 'text') and content.text: 
                     messages.append({
                       "role": "assistant",
                       "content": content.text
@@ -167,7 +167,7 @@ class MCPClient:
                     messages=messages,
                 )
 
-                final_text.append(f"{Style.BRIGHT}{Fore.CYAN}{response.content[0].text}")
+                final_text.append(f"{Style.BRIGHT}{Fore.CYAN}{response.content[0].text}") 
 
         return "\n".join(final_text)
 
@@ -195,6 +195,10 @@ class MCPClient:
         await self.exit_stack.aclose()
 
 async def main():
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    logger.info("Starting MCP Client...")
+
     client = MCPClient()
     try:
         await client.connect_to_server()

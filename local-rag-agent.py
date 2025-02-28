@@ -1,15 +1,18 @@
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
-from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_text_splitters import CharacterTextSplitter
-from dotenv import load_dotenv
 from datetime import datetime, date
-import streamlit as st
 import json
-import os
 import logging
+import os
+import requests
+import streamlit as st
+from dotenv import load_dotenv
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
+from langchain_chroma import Chroma
+from langchain_text_splitters import CharacterTextSplitter
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 # Load environment variables
 load_dotenv()
@@ -22,32 +25,36 @@ model = os.getenv('LLM_MODEL', 'meta-llama/Meta-Llama-3.1-405B-Instruct')
 model_name = os.getenv('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
 rag_directory = os.getenv('DIRECTORY', 'meeting_notes')
 
-@st.cache_resource
+@st.cache_resource()
+
 def get_local_model():
     try:
-        return HuggingFaceEndpoint(
-            repo_id=model,            
+        return HuggingFacePipeline.from_model_id(
+            model_id=model,
             task="text-generation",
-            max_new_tokens=1024,
-            do_sample=False
+            pipeline_kwargs={
+                "max_new_tokens": 1024,
+                "top_k": 50,
+                "temperature": 0.4
+            },
         )
     except Exception as e:
         logger.error(f"Error loading HuggingFaceEndpoint model: {e}")
         st.error("Failed to load the model. Please check the logs for more details.")
         return None
 
-llm = get_local_model()
+llm = get_local_model() if get_local_model() is not None else None
 
-def load_documents(directory):
-    try:
-        # Load the PDF or txt documents from the directory
-        loader = DirectoryLoader(directory)
-        documents = loader.load()
-        return documents
-    except Exception as e:
-        logger.error(f"Error loading documents from directory {directory}: {e}")
-        st.error("Failed to load documents. Please check the logs for more details.")
-        return []
+if llm is None:
+    st.error("Model is not available. Please check the logs for more details.")
+    st.stop()
+
+class DirectoryChangeHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith(".pdf") or event.src_path.endswith(".txt"): # Adapt for your file types
+            st.experimental_rerun()
 
 @st.cache_resource
 def load_documents(directory):
@@ -96,7 +103,10 @@ def prompt_ai(messages):
         ai_response = doc_chatbot.invoke(messages[:-1] + [HumanMessage(content=formatted_prompt)])
 
         return ai_response
+
     except Exception as e:
+
+        
         logger.error(f"Error in prompt_ai: {e}")
         return "An error occurred while processing your request."
 
@@ -118,27 +128,43 @@ def main():
             with st.chat_message(message_type):
                 st.markdown(message_json["content"])
 
-    if llm is None:
-        st.error("Model is not available. Please check the logs for more details.")
-        return
-
-    # Example usage of the local model
-    user_input = st.text_input("Enter your query:")
     if prompt := st.chat_input("What would you like to do today?"):
         # Display user message in chat message container
         st.chat_message("user").markdown(prompt)
-        # Add user message to chat history
         st.session_state.messages.append(HumanMessage(content=prompt))
 
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
+    with st.chat_message("assistant"):
             try:
                 response = prompt_ai(st.session_state.messages)
-                st.markdown(response.content)
-                st.session_state.messages.append(AIMessage(content=response.content))
+                if isinstance(response, str) and "error" in response.lower():
+                    st.error(response)
+                    logger.error(f"Error generating response: {response}")
+                else:
+                    st.markdown(response.content)
+                    st.session_state.messages.append(AIMessage(content=response.content))
             except Exception as e:
-                logger.error(f"Error generating response: {e}")
-                st.error("Failed to generate a response. Please check the logs for more details.")
+                logger.exception("An unexpected error occurred during response generation.")
+                error_message = f"An unexpected error occurred: {e}"
+                if isinstance(e, requests.exceptions.RequestException):
+                    error_message = "Network error. Please check your internet connection."
+                elif isinstance(e, ValueError):
+                    error_message = "Invalid input. Please try again."
+                elif isinstance(e, IndexError):
+                    error_message = "Error accessing document. Please check the document's formatting and contents."
+                st.error(error_message)
+
+    event_handler = DirectoryChangeHandler()
+    global observer
+    if 'observer' not in globals():
+        observer = Observer()
+        observer.schedule(event_handler, rag_directory, recursive=True)
+        observer.start()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        observer.stop()
+        raise e
+    observer.stop()
+    observer.join()
